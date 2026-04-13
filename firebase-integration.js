@@ -91,6 +91,10 @@ async function downloadCloudData(uid) {
             if(data.lastOpenedMonth) localStorage.setItem('lastOpenedMonth', data.lastOpenedMonth);
             if(data.lastOpenedYear) localStorage.setItem('lastOpenedYear', data.lastOpenedYear);
             
+            if(data.notificationsEnabled !== undefined) localStorage.setItem('notificationsEnabled', data.notificationsEnabled);
+            if(data.notificationTime) localStorage.setItem('notificationTime', data.notificationTime);
+            if(data.lastNotificationDate) localStorage.setItem('lastNotificationDate', data.lastNotificationDate);
+            
             if(window.reloadAppFromLocal) {
                 window.reloadAppFromLocal();
             } else {

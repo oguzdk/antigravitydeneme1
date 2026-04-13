@@ -16,8 +16,11 @@ const progressText = document.getElementById('daily-progress-text');
 
 // State Management
 let habits = JSON.parse(localStorage.getItem('habits') || '[]');
-let theme = localStorage.getItem('theme') || 'dark'; // Default to dark for premium feel
+let theme = localStorage.getItem('theme') || 'dark';
 let userXP = parseInt(localStorage.getItem('userXP') || '0');
+let notificationsEnabled = localStorage.getItem('notificationsEnabled') === 'true';
+let notificationTime = localStorage.getItem('notificationTime') || '20:00';
+let lastNotificationDate = localStorage.getItem('lastNotificationDate') || '';
 let currentLoadedDate = '';
 
 // Initial Setup
@@ -41,6 +44,24 @@ function init() {
     // Check Reports
     checkReports();
     
+    // Set UI Toggles
+    const notifToggle = document.getElementById('notification-toggle');
+    const notifTimeWrap = document.getElementById('notification-time-wrapper');
+    const notifTimeInput = document.getElementById('notification-time');
+    
+    if (notifToggle && notifTimeWrap && notifTimeInput) {
+        notifToggle.checked = notificationsEnabled;
+        notifTimeInput.value = notificationTime;
+        notifTimeWrap.style.display = notificationsEnabled ? 'flex' : 'none';
+        
+        // İzin kontrolü, açık kalmış ama izni Reddedilmiş ise kapa
+        if (notificationsEnabled && Notification.permission !== 'granted') {
+            notificationsEnabled = false;
+            notifToggle.checked = false;
+            notifTimeWrap.style.display = 'none';
+        }
+    }
+    
     // Midnight check for auto-refresh
     setInterval(() => {
         const d = getTodayStr();
@@ -49,6 +70,31 @@ function init() {
             dateDisplay.textContent = new Date().toLocaleDateString('tr-TR', options);
             renderHabits();
             checkReports();
+        }
+        
+        // Bildirim Kontrolü
+        if (notificationsEnabled && Notification.permission === "granted") {
+            const now = new Date();
+            const currentHM = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+            
+            if (currentHM === notificationTime && lastNotificationDate !== d) {
+                // Tamamlanmamış görev var mı?
+                const hasUncompleted = habits.some(h => {
+                    let val = h.history[d] || 0;
+                    if (val === true) val = h.target || 1;
+                    if (h.type === 'numeric') return val < h.target;
+                    return !val;
+                });
+                
+                if (hasUncompleted) {
+                    new Notification("HabitFlow Hatırlatıcısı", {
+                        body: "Bugün tamamlanmamış hedeflerin var! Mükemmel bir gün olması için hemen göz atmaya ne dersin?",
+                    });
+                    lastNotificationDate = d;
+                    localStorage.setItem('lastNotificationDate', lastNotificationDate);
+                    if(window.triggerCloudSync) window.triggerCloudSync();
+                }
+            }
         }
     }, 60000); // Her dakika kontrol et
 }
@@ -222,7 +268,10 @@ window.triggerCloudSync = function() {
             userXP: userXP,
             theme: theme,
             lastOpenedMonth: localStorage.getItem('lastOpenedMonth') || '',
-            lastOpenedYear: localStorage.getItem('lastOpenedYear') || ''
+            lastOpenedYear: localStorage.getItem('lastOpenedYear') || '',
+            notificationsEnabled: notificationsEnabled,
+            notificationTime: notificationTime,
+            lastNotificationDate: lastNotificationDate
         });
     }
 };
@@ -232,11 +281,59 @@ window.reloadAppFromLocal = function() {
     userXP = parseInt(localStorage.getItem('userXP') || '0');
     theme = localStorage.getItem('theme') || 'dark';
     
+    notificationsEnabled = localStorage.getItem('notificationsEnabled') === 'true';
+    notificationTime = localStorage.getItem('notificationTime') || '20:00';
+    lastNotificationDate = localStorage.getItem('lastNotificationDate') || '';
+    
+    const notifToggle = document.getElementById('notification-toggle');
+    const notifTimeWrap = document.getElementById('notification-time-wrapper');
+    const notifTimeInput = document.getElementById('notification-time');
+    if (notifToggle) notifToggle.checked = notificationsEnabled;
+    if (notifTimeInput) notifTimeInput.value = notificationTime;
+    if (notifTimeWrap) notifTimeWrap.style.display = notificationsEnabled ? 'flex' : 'none';
+    
     setTheme(theme);
     updateGamification();
     renderHabits();
     if(window.lucide) window.lucide.createIcons();
 };
+
+window.toggleNotifications = function() {
+    const toggle = document.getElementById('notification-toggle');
+    if (toggle.checked) {
+        if ("Notification" in window) {
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                    notificationsEnabled = true;
+                    document.getElementById('notification-time-wrapper').style.display = 'flex';
+                    saveNotificationSettings();
+                } else {
+                    toggle.checked = false;
+                    alert("Bildirim izni vermediğiniz için bu özellik aktifleştirilemedi.");
+                }
+            });
+        } else {
+            toggle.checked = false;
+            alert("Tarayıcınız bildirimleri desteklemiyor.");
+        }
+    } else {
+        notificationsEnabled = false;
+        document.getElementById('notification-time-wrapper').style.display = 'none';
+        saveNotificationSettings();
+    }
+};
+
+window.saveNotificationTime = function() {
+    notificationTime = document.getElementById('notification-time').value;
+    saveNotificationSettings();
+};
+
+function saveNotificationSettings() {
+    localStorage.setItem('notificationsEnabled', notificationsEnabled);
+    localStorage.setItem('notificationTime', notificationTime);
+    localStorage.setItem('lastNotificationDate', lastNotificationDate);
+    if(window.triggerCloudSync) window.triggerCloudSync();
+}
 
 // ==========================================
 // Helpers & Calculations
